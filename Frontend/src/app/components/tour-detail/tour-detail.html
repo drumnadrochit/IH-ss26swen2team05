@@ -12,17 +12,20 @@
             <div class="detail-meta">
               <span class="detail-badge">
                 @switch (tour.transportType) {
-                  @case ('BIKE') {
+                  @case ('Bicycling') {
                     <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zm-3 11.5L8 10h4l3.5-4 3 7.5"/></svg>
                   }
-                  @case ('HIKE') {
+                  @case ('Hiking') {
                     <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 20l4-8 3 4 4-7 7 11H3z"/><circle cx="13" cy="6" r="1.5"/></svg>
                   }
-                  @case ('RUNNING') {
+                  @case ('Walking') {
                     <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="15" cy="4" r="1.5"/><path d="M9 20l2-5-3-2 2-4 4 2 2-3 3 4m-8-5l-3 3"/></svg>
                   }
-                  @case ('VACATION') {
+                  @case ('Mixed') {
                     <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 16l-6-4V5a1.5 1.5 0 00-3 0v7l-6 4v2l6-2v4l-2 1.5V22l3.5-1 3.5 1v-1.5L15 19v-4l6 2v-1z"/></svg>
+                  }
+                  @default {
+                    <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.5-7-11a7 7 0 1114 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
                   }
                 }
                 <span>{{ getTransportLabel(tour.transportType) }}</span>
@@ -45,6 +48,21 @@
         @if (tour.description) {
           <p class="description">{{ tour.description }}</p>
         }
+
+        <div class="tour-image">
+          @if (imageBlobUrl(); as url) {
+            <img [src]="url" alt="{{ tour.name }}" class="tour-image-preview" />
+          } @else {
+            <div class="tour-image-placeholder">No image yet</div>
+          }
+          <input type="file" accept="image/png,image/jpeg" hidden #imageInput (change)="onImageFileSelected($event)" />
+          <button class="btn-add-log" (click)="imageInput.click()">
+            {{ imageBlobUrl() ? 'Change Image' : 'Add Image' }}
+          </button>
+          @if (imageUploadError()) {
+            <span class="image-error">{{ imageUploadError() }}</span>
+          }
+        </div>
 
         <!-- Stats as a proper grid -->
         <div class="stats-grid">
@@ -70,7 +88,7 @@
           </div>
           <div class="stat-block">
             <span class="stat-block-label">Child-Friendly</span>
-            <span class="stat-block-value">{{ tour.childFriendliness }} / 5</span>
+            <span class="stat-block-value">{{ tour.childFriendliness }}%</span>
           </div>
         </div>
       </div>

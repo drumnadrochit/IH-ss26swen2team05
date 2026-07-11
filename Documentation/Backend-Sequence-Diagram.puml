@@ -1,0 +1,46 @@
+@startuml
+title Create Tour — Sequence Diagram
+
+actor "Angular Frontend" as FE
+participant "ToursController" as API
+participant "UseCaseValidatorDecorator" as Validator
+participant "UseCaseLoggingDecorator" as Logger
+participant "CreateTourUseCase" as UseCase
+participant "IOpenRouteService" as ORS
+participant "Tour (Domain)" as Domain
+participant "ITourRepository" as Repo
+participant "IUnitOfWork" as UoW
+database "PostgreSQL" as DB
+
+FE -> API : POST /api/tours (CreateTourRequest)
+API -> Validator : ExecuteAsync(request)
+Validator -> Validator : Validate (FluentValidation)
+
+alt request invalid
+    Validator --> API : ValidationException
+    API --> FE : 400 Bad Request
+else request valid
+    Validator -> Logger : ExecuteAsync(request)
+    Logger -> UseCase : ExecuteAsync(request)
+
+    UseCase -> ORS : BuildRouteAsync(from, to, transportType)
+    ORS -> ORS : Geocode from/to, request directions from openrouteservice.org
+    alt OpenRouteService reachable
+        ORS --> UseCase : RoutePlan (distance, duration, geoJson, coords)
+    else OpenRouteService fails
+        ORS --> UseCase : RoutePlan (fallback estimate)
+    end
+
+    UseCase -> Domain : Tour.Create(userId, ..., route)
+    UseCase -> Repo : AddAsync(tour)
+    UseCase -> UoW : SaveChangesAsync()
+    UoW -> DB : INSERT INTO "Tours"
+    DB --> UoW : OK
+    UoW --> UseCase : rows affected
+
+    UseCase --> Logger : TourSummaryResponseDto
+    Logger --> Validator : TourSummaryResponseDto
+    Validator --> API : TourSummaryResponseDto
+    API --> FE : 201 Created (TourSummaryResponseDto)
+end
+@enduml

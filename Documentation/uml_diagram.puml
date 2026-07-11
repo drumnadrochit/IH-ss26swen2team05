@@ -1,0 +1,152 @@
+@startuml
+!theme plain
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+top to bottom direction
+
+namespace TourPlanner {
+' ==========================================
+' SHARED MODELS & ENTITIES
+' ==========================================
+
+' ==========================================
+' API LAYER (PRESENTATION)
+' ==========================================
+    package "API (Presentation & Infrastructure)" #C9DAF8 {
+        ' --- HTTP Core ---
+        interface IServer
+        class HttpServer
+        IServer <|-- HttpServer
+        
+        enum HttpStatusCode
+        enum HttpMethod
+        class HttpMethodUtilities <<static>>
+        class HttpResponse
+        class HttpListenerExtensions <<static>>
+        class CurrentUserIdentity
+        class HttpRequest
+    
+        ' --- Middleware & Serialization ---
+        interface IMiddleware
+        class AuthMiddleware
+        IMiddleware <|-- AuthMiddleware
+        
+        interface IJsonSerializer
+        interface IJsonDeserializer
+        class JsonCustomJsonSerializer
+        IJsonSerializer <|-- JsonCustomJsonSerializer
+        IJsonDeserializer <|-- JsonCustomJsonSerializer
+    
+        ' --- Endpoints ---
+        interface IHttpEndpoint
+        class EndpointBase
+        class EndpointData
+        class EndpointHelper <<static>>
+        
+        IHttpEndpoint <|-- EndpointBase
+        
+        class UserEndpoint
+        class SessionEndpoint
+        class AuthEndpoint
+        
+        
+        EndpointBase <|-- UserEndpoint
+        EndpointBase <|-- AuthEndpoint
+        EndpointBase <|-- SessionEndpoint
+    }
+
+' ==========================================
+' BUSINESS LOGIC LAYER (BLL)
+' ==========================================
+    package "BLL (Business Logic Layer)" #FFF2CC {
+        ' --- DTOs ---
+        package "DTOs" {
+        }
+    
+        ' --- Mappers ---
+        package "Mappers" {
+        }
+    
+        ' --- Exceptions ---
+        package "Exceptions" {
+            class DataAccessFailedException
+            class DuplicateKeyException
+            class UserNotFoundException
+            class SessionCreationException
+            class SessionDeletionException
+            class UsernameAlreadyTakenException
+            class DataNotFoundException
+            class DuplicateUserException
+            class ValidDataException
+        }
+    
+        ' --- Services ---
+        interface IHashingService
+        class BCryptHashingService
+        IHashingService <|-- BCryptHashingService
+    
+        interface IAuthService
+        class AuthService
+        IAuthService <|-- AuthService
+    
+        interface IUserService
+        class UserService
+        IUserService <|-- UserService
+    
+        interface ISessionService
+        class SessionService
+        ISessionService <|-- SessionService
+        
+        UserEndpoint <.. IUserService
+        SessionEndpoint <.. ISessionService
+        AuthEndpoint <.. IAuthService
+    }
+
+' ==========================================
+' DATA ACCESS LAYER (DAL)
+' ==========================================
+    package "DAL (Data Access Layer)" #D9EAD3 {
+        class PostgreSqlBaseRepository {
+            # <<readonly>> ConnectionString : string
+            + PostgreSqlBaseRepository(connectionString:string)
+            # ExecuteWithDbConnection(command:Func<NpgsqlConnection, T>) : T
+            # ExecuteWithDbConnection(command:Action<NpgsqlConnection>) : void
+        }
+        
+        interface IAuthRepository
+        class PostgreSqlAuthRepository <<sealed>>
+        PostgreSqlBaseRepository <|-- PostgreSqlAuthRepository
+        IAuthRepository <|-- PostgreSqlAuthRepository
+        
+        interface IUserRepository
+        class PostgreSqlUserRepository <<sealed>>
+        class InMemoryUserRepository
+        PostgreSqlBaseRepository <|-- PostgreSqlUserRepository
+        IUserRepository <|-- PostgreSqlUserRepository
+        IUserRepository <|-- InMemoryUserRepository
+        
+        interface ISessionRepository
+        class PostgresSessionRepository <<sealed>>
+        PostgreSqlBaseRepository <|-- PostgresSessionRepository
+        ISessionRepository <|-- PostgresSessionRepository
+        
+        class PostgreSqlRepositoryFactory {
+            - <<readonly>> _connectionString : string
+            + CreateUserRepository() : IUserRepository
+            + CreateSessionRepository() : ISessionRepository
+            + CreateAuthRepository() : IAuthRepository
+        }
+        
+        PostgreSqlUserRepository <.. IUserService
+        PostgreSqlAuthRepository <.. IAuthService
+        PostgresSessionRepository <.. ISessionService 
+    }
+}
+HttpServer -[hidden]down-> AuthService
+AuthService -[hidden]down-> PostgreSqlBaseRepository
+
+"API (Presentation & Infrastructure)" -[hidden]down- "BLL (Business Logic Layer)"
+"BLL (Business Logic Layer)" -[hidden]down- "DAL (Data Access Layer)"
+
+@enduml

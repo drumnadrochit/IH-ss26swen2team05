@@ -1,0 +1,47 @@
+﻿services:
+  tourplanner:
+    container_name: TourPlanner
+    image: tourplanner
+    build:
+      context: .
+      dockerfile: TourPlanner/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION: 1
+      CONSOLE__FormatterName: simple
+      ConnectionStrings__DefaultConnection: Host=tour-planner_database;Port=5432;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Database=${POSTGRES_DB}
+      Jwt__Issuer: TourPlanner
+      Jwt__Audience: TourPlanner.Client
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be provided}
+      Storage__BasePath: /app/storage
+      OpenRouteService__BaseUrl: https://api.openrouteservice.org
+      OpenRouteService__ApiKey: ${OPENROUTE_API_KEY:-}
+    ports:
+      - "${API_PORT:-10001}:8080"
+    depends_on:
+      tour-planner_database:
+        condition: service_healthy
+    volumes:
+      - tourplanner-storage:/app/storage
+
+  tour-planner_database:
+    container_name: tourplanner.database
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Postgres user required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Postgres password required}
+      POSTGRES_DB: ${POSTGRES_DB:?Postgres DB name required}
+    ports:
+      - "${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - tour-planner:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    
+volumes:
+  tour-planner: {}
+  tourplanner-storage: {}

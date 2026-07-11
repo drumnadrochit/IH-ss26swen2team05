@@ -12,9 +12,37 @@
       <span class="logo-text">Tour Planner</span>
     </div>
     <div class="topbar-right">
+      <input
+        type="file"
+        accept="application/json,.json"
+        hidden
+        #importInput
+        (change)="onImportFileSelected($event)"
+      />
+      <button class="topbar-btn" (click)="importInput.click()">Import</button>
       <button class="topbar-btn" (click)="onLogout()">Logout</button>
     </div>
   </header>
+
+  @if (importMessage()) {
+    <app-popup
+      [title]="importError() ? 'Import failed' : 'Import complete'"
+      [message]="importMessage()"
+      [variant]="importError() ? 'danger' : 'default'"
+      confirmText="OK"
+      (confirmed)="onImportPopupConfirm()">
+    </app-popup>
+  }
+
+  @if (saveErrorMessage()) {
+    <app-popup
+      title="Save failed"
+      [message]="saveErrorMessage()"
+      variant="danger"
+      confirmText="OK"
+      (confirmed)="onSaveErrorPopupConfirm()">
+    </app-popup>
+  }
 
   <!-- Main area: list + map (shrinks when drawer opens) -->
   <div class="workspace">
@@ -61,9 +89,9 @@
           @case ('tour-form') {
             <app-tour-form
               [tour]="editingTour()"
-              [userId]="currentUserId()"
               (tourSaved)="onTourFormSave($event)"
-              (cancel)="onTourFormCancel()">
+              (cancel)="onTourFormCancel()"
+              (previewChanged)="onFormPreviewChanged($event)">
             </app-tour-form>
           }
 

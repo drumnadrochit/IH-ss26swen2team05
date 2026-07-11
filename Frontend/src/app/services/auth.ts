@@ -1,74 +1,78 @@
-import { Injectable } from '@angular/core';
-import { User } from '../models/user';
-import { MOCK_USERS } from '../mock_data/users';
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { tap } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { AuthRequest, RefreshRequest, AuthResponse } from '../models/API/Auth';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
+  private http = inject(HttpClient);
+  private baseUrl = `${environment.apiUrl}/api/auth`;
 
-  private currentUser: User | null = null;
+  private tokenKey = 'accessToken';
+  private refreshKey = 'refreshToken';
+  private userKey = 'currentUser';
 
   private isBrowser(): boolean {
-    return typeof sessionStorage !== 'undefined';
+    return typeof localStorage !== 'undefined';
   }
 
-  constructor() {
-    if (this.isBrowser()) {
-      const storedUsers = sessionStorage.getItem('mockUsers');
-      if (storedUsers) {
-        const users = JSON.parse(storedUsers);
-        users.forEach((u: User) => {
-          if (!MOCK_USERS.find(existing => existing.id === u.id)) {
-            MOCK_USERS.push(u);
-          }
-        });
-      }
-
-      const stored = sessionStorage.getItem('currentUser');
-      if (stored) {
-        this.currentUser = JSON.parse(stored);
-      }
-    }
-  }
-
-  login(username: string, password: string): boolean {
-    const user = MOCK_USERS.find(
-      u => u.username === username && u.password === password
+  login(userName: string, password: string) {
+    const body: AuthRequest = { userName, password };
+    return this.http.post<AuthResponse>(`${this.baseUrl}/login`, body).pipe(
+      tap(res => this.storeSession(res))
     );
-    if (user) {
-      this.currentUser = user;
-      if (this.isBrowser()) {
-        sessionStorage.setItem('currentUser', JSON.stringify(user));
-      }
-      return true;
-    }
-    return false;
   }
 
-  register(user: User): void {
-    user.id = MOCK_USERS.length + 1;
-    MOCK_USERS.push(user);
-    if (this.isBrowser()) {
-      sessionStorage.setItem('mockUsers', JSON.stringify(MOCK_USERS));
-    }
+  register(userName: string, password: string) {
+    const body: AuthRequest = { userName, password };
+    return this.http.post<AuthResponse>(`${this.baseUrl}/register`, body).pipe(
+      tap(res => this.storeSession(res))
+    );
+  }
+
+  refresh() {
+    const body: RefreshRequest = { refreshToken: this.getRefreshToken() ?? '' };
+    return this.http.post<AuthResponse>(`${this.baseUrl}/refresh`, body).pipe(
+      tap(res => this.storeSession(res))
+    );
   }
 
   logout(): void {
-    this.currentUser = null;
     if (this.isBrowser()) {
-      sessionStorage.removeItem('currentUser');
+      localStorage.removeItem(this.tokenKey);
+      localStorage.removeItem(this.refreshKey);
+      localStorage.removeItem(this.userKey);
     }
   }
 
   isLoggedIn(): boolean {
-    if (this.isBrowser()) {
-      return sessionStorage.getItem('currentUser') !== null;
-    }
-    return this.currentUser !== null;
+    return this.getToken() !== null;
   }
 
-  getCurrentUser(): User | null {
-    return this.currentUser;
+  getToken(): string | null {
+    return this.isBrowser() ? localStorage.getItem(this.tokenKey) : null;
+  }
+
+  getRefreshToken(): string | null {
+    return this.isBrowser() ? localStorage.getItem(this.refreshKey) : null;
+  }
+
+  getCurrentUser(): { userId: string; userName: string } | null {
+    if (!this.isBrowser()) return null;
+    const stored = localStorage.getItem(this.userKey);
+    return stored ? JSON.parse(stored) : null;
+  }
+
+  private storeSession(res: AuthResponse): void {
+    if (!this.isBrowser()) return;
+    localStorage.setItem(this.tokenKey, res.accessToken);
+    localStorage.setItem(this.refreshKey, res.refreshToken);
+    localStorage.setItem(
+      this.userKey,
+      JSON.stringify({ userId: res.userId, userName: res.userName })
+    );
   }
 }

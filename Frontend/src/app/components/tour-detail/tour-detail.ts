@@ -1,10 +1,12 @@
 import {
-  Component, Input, Output, EventEmitter,
+  Component, Input, Output, EventEmitter, OnDestroy,
   signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { Tour, TransportType } from '../../models/tour';
-import { TourLog } from '../../models/tour_log';
+import { TourLog, difficultyWeight } from '../../models/tour_log';
 import { PopupComponent } from '../shared/popup/popup';
+import { formatTime } from '../../utils/format';
+import { TourService } from '../../services/tour';
 
 @Component({
   selector: 'app-tour-detail',
@@ -14,10 +16,13 @@ import { PopupComponent } from '../shared/popup/popup';
   templateUrl: './tour-detail.html',
   styleUrls: ['./tour-detail.scss']
 })
-export class TourDetailComponent {
+export class TourDetailComponent implements OnDestroy {
+
+  constructor(private tourService: TourService) {}
 
   @Input() set tour(value: Tour | null) {
     this._tour.set(value);
+    this.loadImage(value);
   }
 
   @Input() set logs(value: TourLog[]) {
@@ -33,6 +38,8 @@ export class TourDetailComponent {
 
   _tour = signal<Tour | null>(null);
   _logs = signal<TourLog[]>([]);
+  imageBlobUrl = signal<string | null>(null);
+  imageUploadError = signal('');
 
   activeTab = signal<'info' | 'logs'>('info');
 
@@ -50,12 +57,12 @@ export class TourDetailComponent {
   avgDifficulty = computed(() => {
     const logs = this._logs();
     if (logs.length === 0) return '—';
-    const diffMap: Record<string, number> = { EASY: 1, MEDIUM: 2, HARD: 3, EXPERT: 4 };
-    const avg = logs.reduce((sum, l) => sum + (diffMap[l.difficulty] || 2), 0) / logs.length;
-    if (avg <= 1.5) return 'Easy';
-    if (avg <= 2.5) return 'Medium';
-    if (avg <= 3.5) return 'Hard';
-    return 'Expert';
+    const avg = logs.reduce((sum, l) => sum + difficultyWeight(l.difficulty), 0) / logs.length;
+    if (avg <= 1.5) return 'Very Easy';
+    if (avg <= 2.5) return 'Easy';
+    if (avg <= 3.5) return 'Medium';
+    if (avg <= 4.5) return 'Hard';
+    return 'Extreme';
   });
 
   deleteLogMessage = computed(() => {
@@ -66,21 +73,18 @@ export class TourDetailComponent {
 
   getTransportLabel(type: TransportType): string {
     switch (type) {
-      case TransportType.BIKE: return 'Bike';
-      case TransportType.HIKE: return 'Hike';
-      case TransportType.RUNNING: return 'Running';
-      case TransportType.VACATION: return 'Vacation';
-      default: return type;
+      case TransportType.Walking: return 'Walking';
+      case TransportType.Hiking: return 'Hiking';
+      case TransportType.Bicycling: return 'Bicycling';
+      case TransportType.Car: return 'Car';
+      case TransportType.PublicTransport: return 'Public Transport';
+      case TransportType.Train: return 'Train';
+      case TransportType.Bus: return 'Bus';
+      case TransportType.Mixed: return 'Mixed';
     }
   }
 
-  formatTime(minutes: number): string {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    if (h === 0) return `${m}min`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-  }
+  formatTime = formatTime;
 
   formatDate(dateStr: string): string {
     const d = new Date(dateStr);
@@ -127,5 +131,39 @@ export class TourDetailComponent {
   onCancelDeleteLog(): void {
     this.showDeleteLogConfirm.set(false);
     this.logToDelete.set(null);
+  }
+
+  onImageFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-selecting the same file later
+    const tour = this._tour();
+    if (!file || !tour) return;
+
+    this.imageUploadError.set('');
+    this.tourService.uploadImage(tour.id, file).subscribe({
+      next: (updated) => {
+        this._tour.set(updated);
+        this.loadImage(updated);
+      },
+      error: () => this.imageUploadError.set('Image upload failed. Please try a .jpg or .png file.'),
+    });
+  }
+
+  private loadImage(tour: Tour | null): void {
+    const previous = this.imageBlobUrl();
+    if (previous) URL.revokeObjectURL(previous);
+    this.imageBlobUrl.set(null);
+
+    if (!tour?.imagePath) return;
+    this.tourService.getImageBlobUrl(tour.id).subscribe({
+      next: (url) => this.imageBlobUrl.set(url),
+      error: () => this.imageBlobUrl.set(null),
+    });
+  }
+
+  ngOnDestroy(): void {
+    const current = this.imageBlobUrl();
+    if (current) URL.revokeObjectURL(current);
   }
 }

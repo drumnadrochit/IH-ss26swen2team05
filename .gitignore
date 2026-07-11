@@ -49,6 +49,8 @@ Frontend/.vscode/*
 /backend/[Oo]bj/
 /backend/TestResults/
 
+
+
 # Configuration & Secrets
 appsettings.Development.json
 usersecrets.json
@@ -88,6 +90,7 @@ yarn-error.log*
 .env.local
 .env.*.local
 !.env.example
+db_conf.env
 
 ## 5. Databases
 *.db

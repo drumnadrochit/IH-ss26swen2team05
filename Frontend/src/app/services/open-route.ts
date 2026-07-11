@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
+import { TransportType } from '../models/tour';
 
 @Injectable({
   providedIn: 'root'
 })
 export class OpenRouteService {
 
-  // TODO: move to environment file for production
   private apiKey = environment.orsApiKey;
   private baseUrl = 'https://api.openrouteservice.org';
 
@@ -99,15 +99,19 @@ export class OpenRouteService {
   }
 
   /**
-   * Map TransportType to ORS profile
+   * Map TransportType to ORS profile.
+   * ORS has no public-transport/train/bus profile, so those fall back to driving-car.
    */
-  getProfile(transportType: string): string {
+  getProfile(transportType: TransportType): string {
     switch (transportType) {
-      case 'BIKE': return 'cycling-regular';
-      case 'HIKE': return 'foot-hiking';
-      case 'RUNNING': return 'foot-walking';
-      case 'VACATION': return 'driving-car';
-      default: return 'foot-hiking';
+      case TransportType.Walking: return 'foot-walking';
+      case TransportType.Hiking: return 'foot-hiking';
+      case TransportType.Bicycling: return 'cycling-regular';
+      case TransportType.Car: return 'driving-car';
+      case TransportType.PublicTransport: return 'driving-car';
+      case TransportType.Train: return 'driving-car';
+      case TransportType.Bus: return 'driving-car';
+      case TransportType.Mixed: return 'driving-car';
     }
   }
 }

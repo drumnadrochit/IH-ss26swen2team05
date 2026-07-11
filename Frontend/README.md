@@ -51,14 +51,10 @@ npx ng serve
 Open [http://localhost:4200](http://localhost:4200) in your browser.
 The app reloads automatically when you change source files.
 
-## Demo Login
+## Login
 
-For development, the following mock users are available:
-
-| Username | Password |
-|----------|----------|
-| `admin`  | `admin`  |
-| `user`   | `user`   |
+Authentication is real, backed by the Tour Planner API (JWT access + refresh tokens) — register a
+new account from the login screen, there are no mock/demo users anymore.
 
 ## Project Structure
 
@@ -66,39 +62,47 @@ For development, the following mock users are available:
 src/app/
 ├── components/
 │   ├── auth/                  # Login / Register screen
-│   ├── dashboard/             # Main layout (list + map + bottom panel)
-│   ├── tour-list/             # Sidebar with tour cards and search
+│   ├── dashboard/             # Main layout (list + map + bottom panel), owns the shared map state
+│   ├── tour-list/             # Sidebar with tour cards and backend-driven search
 │   ├── tour-detail/           # Tour info + logs (bottom panel)
-│   ├── tour-form/             # Create / edit tour form
+│   ├── tour-form/             # Create / edit tour form, with live route preview
 │   ├── tour-log-form/         # Create / edit log form
 │   └── shared/
-│       ├── map-display/       # Reusable Leaflet map component
+│       ├── map-display/       # Reusable Leaflet map component (click-to-set start/destination)
 │       └── popup/             # Reusable confirmation / info popup
+├── guards/
+│   └── auth-guard.ts          # Route guard redirecting to /auth when logged out
+├── interceptors/
+│   └── auth.interceptor.ts    # Attaches the JWT to outgoing API requests
 ├── models/
 │   ├── tour.ts                # Tour interface + TransportType enum
-│   └── tour_log.ts            # TourLog interface + Difficulty enum
+│   ├── tour_log.ts            # TourLog interface + Difficulty enum
+│   └── API/                   # DTOs mirroring the backend's request/response contracts
 ├── services/
-│   ├── auth.ts                # Authentication service (mock)
-│   ├── tour.ts                # Tour + Log CRUD, search, import/export
-│   └── open-route.service.ts  # OpenRouteService API (geocoding, routing)
-├── mock_data/
-│   ├── mock_tours.ts          # Sample tours
-│   └── mock_tour_logs.ts      # Sample logs
+│   ├── auth.ts                # Login / register / refresh against the real backend
+│   ├── tour.ts                # Tour CRUD
+│   ├── tour-log.ts            # Tour log CRUD
+│   ├── search.ts               # Full-text search across tours and logs
+│   ├── import-export.ts        # Account-wide tour export/import
+│   └── open-route.ts           # Client-side OpenRouteService calls (geocoding, live preview)
+├── utils/
+│   └── format.ts                # Shared display formatting (e.g. duration)
 └── environments/
     └── environment.template.ts  # API key template (committed)
 ```
 
 ## Features
 
-- User authentication (login / register)
-- Tour CRUD with name, description, from, to, transport type, image URL
+- User registration/login against the real backend (JWT access + refresh tokens)
+- Tour CRUD with name, description, from, to, transport type
 - Interactive Leaflet map with sepia-tinted tiles
-- Geocoding (place name → coordinates) and reverse geocoding (map click → name)
-- Auto-route calculation via OpenRouteService with live map preview
+- Click directly on the map to set the start/destination — reverse-geocodes to a place name and
+  computes a live route preview before you save (unique feature; typing a location name works the
+  same way via forward geocoding)
 - Tour log CRUD with date, distance, time, difficulty, rating, comment
 - Automatically computed tour attributes (popularity, child-friendliness)
-- Full-text search across tours and logs (including computed values)
-- Tour export as JSON
+- Full-text search across tours and logs (including computed values), backed by the API
+- Account-wide tour export/import as JSON
 - Reusable components (map-display, popup)
 - Responsive design (desktop, tablet, mobile)
 

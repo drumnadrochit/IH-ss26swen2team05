@@ -3,8 +3,10 @@ import {
   signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Tour, TransportType } from '../../models/tour';
+import { Tour } from '../../models/tour';
 import { PopupComponent } from '../shared/popup/popup';
+import { SearchService, SearchResult } from '../../services/search';
+import { formatTime } from '../../utils/format';
 
 @Component({
   selector: 'app-tour-list',
@@ -27,25 +29,33 @@ export class TourListComponent {
 
   allTours = signal<Tour[]>([]);
   searchQuery = signal('');
-  selectedTourId = signal<number | null>(null);
+  selectedTourId = signal<string | null>(null);
 
   showDeleteConfirm = signal(false);
   tourToDelete = signal<Tour | null>(null);
 
+  // Real backend full-text search across tours AND logs (incl. computed values), matching
+  // GET /api/search. null while no query is active or a search hasn't resolved yet.
+  private searchResult = signal<SearchResult | null>(null);
+  private searchDebounce?: ReturnType<typeof setTimeout>;
+
+  constructor(private searchService: SearchService) {}
+
+  // Empty query: just show everything, no backend round-trip needed.
+  // Otherwise: a tour matches if it matched directly, or one of its logs did
+  // (e.g. a log comment) — the sidebar always lists tours, never bare logs.
   filteredTours = computed(() => {
-    const q = this.searchQuery().toLowerCase().trim();
+    const q = this.searchQuery().trim();
     const tours = this.allTours();
     if (!q) return tours;
 
-    return tours.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q) ||
-      t.from.toLowerCase().includes(q) ||
-      t.to.toLowerCase().includes(q) ||
-      t.transportType.toLowerCase().includes(q) ||
-      `popularity ${t.popularity}`.includes(q) ||
-      `child-friendly ${t.childFriendliness}`.includes(q)
-    );
+    const result = this.searchResult();
+    if (!result) return tours; // still debouncing/waiting on the request
+
+    const matchedTourIds = new Set(result.tours.map(t => t.id));
+    for (const log of result.tourLogs) matchedTourIds.add(log.tourId);
+
+    return tours.filter(t => matchedTourIds.has(t.id));
   });
 
   deleteMessage = computed(() => {
@@ -57,6 +67,23 @@ export class TourListComponent {
   onSearch(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchQuery.set(value);
+
+    clearTimeout(this.searchDebounce);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      this.searchResult.set(null);
+      return;
+    }
+
+    this.searchDebounce = setTimeout(() => {
+      this.searchService.search(trimmed).subscribe({
+        next: (result) => this.searchResult.set(result),
+        error: (err) => {
+          console.error('Search failed', err);
+          this.searchResult.set(null);
+        },
+      });
+    }, 250);
   }
 
   onSelect(tour: Tour): void {
@@ -91,11 +118,5 @@ export class TourListComponent {
     this.tourToDelete.set(null);
   }
 
-  formatTime(minutes: number): string {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    if (h === 0) return `${m}min`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-  }
+  formatTime = formatTime;
 }

@@ -6,11 +6,11 @@
 
   @if (interactive) {
     <div class="map-hud">
-      <div class="hud-chip" [class.active]="selectingFrom()">
+      <div class="hud-chip" [class.active]="armedTarget() === 'from'" (click)="armTarget('from')">
         <span class="hud-dot hud-dot--from"></span>
         Click to mark start
       </div>
-      <div class="hud-chip" [class.active]="!selectingFrom()">
+      <div class="hud-chip" [class.active]="armedTarget() === 'to'" (click)="armTarget('to')">
         <span class="hud-dot hud-dot--to"></span>
         Click to mark destination
       </div>

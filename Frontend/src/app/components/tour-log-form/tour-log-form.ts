@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TourLog, Difficulty } from '../../models/tour_log';
+import { CreateTourLogRequest, UpdateTourLogRequest } from '../../models/API/tour_log_api';
 
 @Component({
   selector: 'app-tour-log-form',
@@ -16,16 +17,16 @@ import { TourLog, Difficulty } from '../../models/tour_log';
 export class TourLogFormComponent implements OnInit {
 
   @Input() log: TourLog | null = null;
-  @Input() tourId: number = 0;
+  @Input() tourId: string = '';
 
-  @Output() logSaved = new EventEmitter<TourLog>();
+  @Output() logSaved = new EventEmitter<CreateTourLogRequest | UpdateTourLogRequest>();
   @Output() cancel = new EventEmitter<void>();
 
   isEditMode = signal(false);
 
   dateTime = signal('');
   comment = signal('');
-  difficulty = signal<Difficulty>(Difficulty.MEDIUM);
+  difficulty = signal<Difficulty>(Difficulty.Medium);
   totalDistance = signal<number>(0);
   totalTime = signal<number>(0);
   rating = signal<number>(3);
@@ -33,10 +34,11 @@ export class TourLogFormComponent implements OnInit {
   errors = signal<Record<string, string>>({});
 
   difficulties = [
-    { value: Difficulty.EASY, label: 'Easy' },
-    { value: Difficulty.MEDIUM, label: 'Medium' },
-    { value: Difficulty.HARD, label: 'Hard' },
-    { value: Difficulty.EXPERT, label: 'Expert' }
+    { value: Difficulty.VeryEasy, label: 'Very Easy' },
+    { value: Difficulty.Easy, label: 'Easy' },
+    { value: Difficulty.Medium, label: 'Medium' },
+    { value: Difficulty.Hard, label: 'Hard' },
+    { value: Difficulty.Extreme, label: 'Extreme' }
   ];
 
   ngOnInit(): void {
@@ -86,18 +88,20 @@ export class TourLogFormComponent implements OnInit {
   onSave(): void {
     if (!this.validate()) return;
 
-    const logData: TourLog = {
-      id: this.log?.id ?? 0,
-      tourId: this.log?.tourId ?? this.tourId,
-      dateTime: this.dateTime(),
+    const base = {
+      accomplishedAt: new Date(this.dateTime()).toISOString(),
       comment: this.comment().trim(),
       difficulty: this.difficulty(),
-      totalDistance: this.totalDistance(),
-      totalTime: this.totalTime(),
-      rating: this.rating()
+      totalDistanceKm: this.totalDistance(),
+      totalTimeMinutes: this.totalTime(),
+      rating: this.rating(),
     };
 
-    this.logSaved.emit(logData);
+    const payload: CreateTourLogRequest | UpdateTourLogRequest = this.log
+      ? { tourLogId: this.log.id, ...base }
+      : { tourId: this.tourId, ...base };
+
+    this.logSaved.emit(payload);
   }
 
   onCancel(): void {

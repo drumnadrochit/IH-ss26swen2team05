@@ -1,0 +1,98 @@
+@startuml CleanArchitectureRouting
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package "API Layer" {
+    class ToursController {
+        - _createTourUseCase : IUseCase<CreateTourRequest, TourSummaryResponseDto>
+        + CreateTour(request: CreateTourRequest, ct: CancellationToken) : Task<ActionResult<TourSummaryResponseDto>>
+    }
+}
+
+package "Application Layer" {
+    class CreateTourRequest <<Record>> {
+        + Name : string
+        + Description : string
+        + From : string
+        + To : string
+        + TransportType : TransportType
+    }
+
+    interface IOpenRouteService <<Interface>> {
+        + BuildRouteAsync(from, to, transportType) : RoutePlan
+    }
+
+    class RoutePlan <<Record>> {
+        + DistanceKm : double
+        + EstimatedMinutes : double
+        + GeoJson : string
+        + RouteInformation : string
+        + FromLatitude : double
+        + FromLongitude : double
+        + ToLatitude : double
+        + ToLongitude : double
+    }
+
+    class CreateTourUseCase {
+        - _routeService : IOpenRouteService
+        - _tours : ITourRepository
+        + ExecuteAsync(request) : TourSummaryResponseDto
+    }
+
+    class TourSummaryResponseDto <<DTO>> {
+        + RouteGeoJson : string?
+        + FromCoords : double[]?
+        + ToCoords : double[]?
+    }
+
+    ToursController ..> CreateTourRequest : Receives
+    ToursController ..> CreateTourUseCase : Invokes
+    CreateTourUseCase ..> CreateTourRequest : Reads
+    CreateTourUseCase ..> IOpenRouteService : Calls
+    IOpenRouteService ..> RoutePlan : Returns
+    CreateTourUseCase ..> TourSummaryResponseDto : Maps To
+    ToursController ..> TourSummaryResponseDto : Returns HTTP 200/201
+}
+
+package "Domain Layer" {
+    class Tour {
+        + Id : Guid
+        + Name : string
+        + RouteInformation : string
+        + RouteGeoJson : string?
+        + FromLocation : Coordinates?
+        + ToLocation : Coordinates?
+        + {static} Create(..., routeGeoJson, fromLocation, toLocation) : Tour
+        + Update(..., routeGeoJson, fromLocation, toLocation) : void
+        + BuildSearchDocument() : string
+    }
+
+    class Coordinates <<Value Object>> {
+        + Latitude : double
+        + Longitude : double
+    }
+
+    Tour *-- Coordinates : Owns (FromLocation)
+    Tour *-- Coordinates : Owns (ToLocation)
+    CreateTourUseCase ..> Tour : Instantiates / Updates
+}
+
+package "Infrastructure Layer" {
+    class OpenRouteServiceClient {
+        - _httpClient : HttpClient
+        + BuildRouteAsync(from, to, transportType) : RoutePlan
+        - GeocodeAsync(location) : double[]
+        - CreateFallbackRoute(...) : RoutePlan
+    }
+
+    class TourPlannerDbContext {
+        + Tours : DbSet<Tour>
+        # OnModelCreating(modelBuilder) : void
+    }
+
+    IOpenRouteService <|.. OpenRouteServiceClient : Implements
+    TourPlannerDbContext ..> Tour : Maps to Postgres (jsonb / OwnsOne)
+}
+
+@enduml

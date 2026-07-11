@@ -169,6 +169,8 @@
   gap: 8px;
   white-space: nowrap;
   transition: all var(--ease);
+  pointer-events: auto;
+  cursor: pointer;
 
   &.active {
     color: var(--brass-bright);

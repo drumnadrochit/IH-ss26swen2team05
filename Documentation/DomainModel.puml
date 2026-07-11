@@ -1,0 +1,57 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+package "Presentation Layer (Angular)" {
+  class TourComponent {
+    +onCreateTour(): void
+  }
+}
+
+package "Web API / Controller" {
+  class TourController {
+    +Create(req: TourRequestDTO): IActionResult
+  }
+}
+
+package "Business Layer (BL)" {
+  class TourService {
+    +ProcessNewTour(req: TourRequestDTO): TourResponseDTO
+    -CalculateChildFriendliness(distance, duration): Boolean
+  }
+  class TourRequestDTO {
+    +Name: String
+    +From: String
+    +To: String
+  }
+  class TourResponseDTO {
+    +Id: Guid
+    +Distance: Double
+    +ChildFriendly: Boolean
+  }
+}
+
+package "Data Access Layer (DAL)" {
+  class TourEntity <<EF Core>> {
+    +Id: Guid
+    +Name: String
+    +Distance: Double
+    +ChildFriendly: Boolean
+  }
+  class TourRepository {
+    +Add(entity: TourEntity): Task<TourEntity>
+  }
+}
+
+' Static Relationships
+TourComponent ..> TourRequestDTO : sends >
+TourController --> TourService : delegates to >
+TourService ..> TourRequestDTO : validates >
+TourService ..> TourEntity : maps to >
+TourService --> TourRepository : uses >
+TourRepository ..> TourEntity : persists
+
+note right of TourRepository
+  The DAL interacts directly 
+  with the Entity.
+end note
+@enduml

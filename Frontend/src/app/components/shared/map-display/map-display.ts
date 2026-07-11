@@ -35,9 +35,10 @@ export class MapDisplayComponent implements AfterViewInit, OnDestroy, OnChanges 
 
   @Output() fromSelected = new EventEmitter<[number, number]>();
   @Output() toSelected = new EventEmitter<[number, number]>();
-  @Output() mapReady = new EventEmitter<L.Map>();
 
-  selectingFrom = signal(true);
+  // null = clicking the map does nothing (both points already set and the user hasn't
+  // asked to redo one via the HUD chips). Otherwise the next click sets that marker.
+  armedTarget = signal<'from' | 'to' | null>(null);
 
   private map!: L.Map;
   private fromMarker: L.Marker | null = null;
@@ -71,11 +72,26 @@ export class MapDisplayComponent implements AfterViewInit, OnDestroy, OnChanges 
     // Handle interactive toggle dynamically
     if (changes['interactive']) {
       this.setupClickHandler();
-      // Reset selection state when entering interactive mode
       if (this.interactive) {
-        this.selectingFrom.set(true);
+        this.armFirstMissing();
+      } else {
+        this.armedTarget.set(null);
       }
     }
+  }
+
+  // Arms whichever point isn't set yet (the natural two-click flow for a brand new
+  // tour). If both are already set, arms nothing — the user must pick a HUD chip to redo one.
+  private armFirstMissing(): void {
+    if (!this.from) this.armedTarget.set('from');
+    else if (!this.to) this.armedTarget.set('to');
+    else this.armedTarget.set(null);
+  }
+
+  /** Called when the user clicks a HUD chip to explicitly redo that point. */
+  armTarget(target: 'from' | 'to'): void {
+    if (!this.interactive) return;
+    this.armedTarget.set(target);
   }
 
   ngOnDestroy(): void { this.map?.remove(); }
@@ -101,7 +117,6 @@ export class MapDisplayComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     this.updateMarkers();
     this.updateRoute();
-    this.mapReady.emit(this.map);
   }
 
   // Click handler is always on the map, but only acts when interactive=true
@@ -110,18 +125,23 @@ export class MapDisplayComponent implements AfterViewInit, OnDestroy, OnChanges 
     this.clickHandlerRegistered = true;
 
     this.map.on('click', (e: L.LeafletMouseEvent) => {
-      // Only respond when interactive mode is on
+      // Only respond when interactive mode is on, and only for the currently-armed point.
       if (!this.interactive) return;
+      const target = this.armedTarget();
+      if (!target) return;
 
       const latlng: [number, number] = [e.latlng.lat, e.latlng.lng];
-      if (this.selectingFrom()) {
+      if (target === 'from') {
         this.setFromMarker(latlng);
         this.fromSelected.emit(latlng);
+        // Auto-advance to "to" only if it's still missing — otherwise this was an
+        // explicit redo of "from", so stop capturing clicks until asked again.
+        this.armedTarget.set(this.to ? null : 'to');
       } else {
         this.setToMarker(latlng);
         this.toSelected.emit(latlng);
+        this.armedTarget.set(this.from ? null : 'from');
       }
-      this.selectingFrom.update(v => !v);
     });
   }
 
@@ -188,14 +208,4 @@ export class MapDisplayComponent implements AfterViewInit, OnDestroy, OnChanges 
   // ── Public API ──
 
   invalidateSize(): void { this.map && setTimeout(() => this.map.invalidateSize(), 0); }
-
-  resetSelection(): void {
-    this.selectingFrom.set(true);
-    [this.fromMarker, this.toMarker, this.routeLayer, this.glowLayer, this.dashedLine].forEach(l => {
-      if (l) this.map.removeLayer(l);
-    });
-    this.fromMarker = this.toMarker = this.routeLayer = this.glowLayer = this.dashedLine = null;
-  }
-
-  getMap(): L.Map { return this.map; }
 }

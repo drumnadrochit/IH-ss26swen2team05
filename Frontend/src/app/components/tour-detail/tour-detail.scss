@@ -104,6 +104,44 @@
   word-break: break-word;
 }
 
+// ─── Tour Image ───
+.tour-image {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tour-image-preview {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--edge-faint);
+}
+
+.tour-image-placeholder {
+  width: 96px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--edge-faint);
+  background: var(--surface-void);
+  font-family: var(--font-script);
+  font-style: italic;
+  font-size: 0.7rem;
+  color: var(--ink-ghost);
+  text-align: center;
+}
+
+.image-error {
+  font-family: var(--font-script);
+  font-style: italic;
+  font-size: 0.8rem;
+  color: var(--ruby-bright);
+}
+
 // ─── Stats Grid — fills the info space properly ───
 .stats-grid {
   display: grid;

@@ -4,7 +4,9 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Tour, TransportType } from '../../models/tour';
+import { CreateTourRequest, UpdateTourRequest } from '../../models/API/Tours';
 import { OpenRouteService } from '../../services/open-route';
+import { formatTime } from '../../utils/format';
 
 @Component({
   selector: 'app-tour-form',
@@ -17,10 +19,16 @@ import { OpenRouteService } from '../../services/open-route';
 export class TourFormComponent implements OnInit {
 
   @Input() tour: Tour | null = null;
-  @Input() userId: number = 1;
 
-  @Output() tourSaved = new EventEmitter<Tour>();
+  @Output() tourSaved = new EventEmitter<CreateTourRequest | UpdateTourRequest>();
   @Output() cancel = new EventEmitter<void>();
+  // The dashboard owns the single shared map-display; this is how the form's live
+  // geocoding/route preview (from typing a location, not just clicking the map) reaches it.
+  @Output() previewChanged = new EventEmitter<{
+    from: [number, number] | null;
+    to: [number, number] | null;
+    routeGeoJson: any;
+  }>();
 
   isEditMode = signal(false);
   isLoading = signal(false);
@@ -29,8 +37,7 @@ export class TourFormComponent implements OnInit {
   description = signal('');
   from = signal('');
   to = signal('');
-  transportType = signal<TransportType>(TransportType.HIKE);
-  imageUrl = signal('');
+  transportType = signal<TransportType>(TransportType.Hiking);
 
   fromCoords = signal<[number, number] | null>(null);
   toCoords = signal<[number, number] | null>(null);
@@ -43,10 +50,14 @@ export class TourFormComponent implements OnInit {
   statusMessage = signal('');
 
   transportTypes: { value: TransportType; label: string }[] = [
-    { value: TransportType.BIKE, label: 'Bike' },
-    { value: TransportType.HIKE, label: 'Hike' },
-    { value: TransportType.RUNNING, label: 'Running' },
-    { value: TransportType.VACATION, label: 'Vacation' }
+    { value: TransportType.Walking, label: 'Walking' },
+    { value: TransportType.Hiking, label: 'Hiking' },
+    { value: TransportType.Bicycling, label: 'Bicycling' },
+    { value: TransportType.Car, label: 'Car' },
+    { value: TransportType.PublicTransport, label: 'Public Transport' },
+    { value: TransportType.Train, label: 'Train' },
+    { value: TransportType.Bus, label: 'Bus' },
+    { value: TransportType.Mixed, label: 'Mixed' },
   ];
 
   constructor(private ors: OpenRouteService) {}
@@ -59,7 +70,6 @@ export class TourFormComponent implements OnInit {
       this.from.set(this.tour.from);
       this.to.set(this.tour.to);
       this.transportType.set(this.tour.transportType);
-      this.imageUrl.set(this.tour.imageUrl ?? '');
       this.fromCoords.set(this.tour.fromCoords);
       this.toCoords.set(this.tour.toCoords);
       this.distance.set(this.tour.distance);
@@ -75,7 +85,6 @@ export class TourFormComponent implements OnInit {
       case 'description': this.description.set(value); break;
       case 'from': this.from.set(value); break;
       case 'to': this.to.set(value); break;
-      case 'imageUrl': this.imageUrl.set(value); break;
     }
     this.errors.update(e => { const c = { ...e }; delete c[field]; return c; });
   }
@@ -88,6 +97,7 @@ export class TourFormComponent implements OnInit {
     if (coords) {
       this.fromCoords.set(coords);
       this.statusMessage.set('Start location found');
+      this.emitPreview();
       this.tryCalculateRoute();
     } else {
       this.statusMessage.set('Could not find start location');
@@ -102,6 +112,7 @@ export class TourFormComponent implements OnInit {
     if (coords) {
       this.toCoords.set(coords);
       this.statusMessage.set('Destination found');
+      this.emitPreview();
       this.tryCalculateRoute();
     } else {
       this.statusMessage.set('Could not find destination');
@@ -110,6 +121,7 @@ export class TourFormComponent implements OnInit {
 
   async onMapFromSelected(coords: [number, number]): Promise<void> {
     this.fromCoords.set(coords);
+    this.emitPreview();
     const name = await this.ors.reverseGeocode(coords[0], coords[1]);
     this.from.set(name ?? `${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`);
     this.tryCalculateRoute();
@@ -117,6 +129,7 @@ export class TourFormComponent implements OnInit {
 
   async onMapToSelected(coords: [number, number]): Promise<void> {
     this.toCoords.set(coords);
+    this.emitPreview();
     const name = await this.ors.reverseGeocode(coords[0], coords[1]);
     this.to.set(name ?? `${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`);
     this.tryCalculateRoute();
@@ -142,6 +155,15 @@ export class TourFormComponent implements OnInit {
       this.statusMessage.set('Route calculation failed');
     }
     this.isLoading.set(false);
+    this.emitPreview();
+  }
+
+  private emitPreview(): void {
+    this.previewChanged.emit({
+      from: this.fromCoords(),
+      to: this.toCoords(),
+      routeGeoJson: this.routeGeoJson(),
+    });
   }
 
   onTransportChange(type: TransportType): void {
@@ -161,37 +183,26 @@ export class TourFormComponent implements OnInit {
   onSave(): void {
     if (!this.validate()) return;
 
-    const tourData: Tour = {
-      id: this.tour?.id ?? 0,
-      userId: this.tour?.userId ?? this.userId,
+    // Distance/coords/route are computed server-side (backend calls OpenRouteService itself),
+    // so only the fields the real CreateTourRequest/UpdateTourRequest accept are sent.
+    const base = {
       name: this.name().trim(),
       description: this.description().trim(),
       from: this.from().trim(),
       to: this.to().trim(),
       transportType: this.transportType(),
-      distance: this.distance(),
-      estimatedTime: this.estimatedTime(),
-      routeGeoJson: this.routeGeoJson(),
-      routeImagePath: this.tour?.routeImagePath ?? '',
-      imageUrl: this.imageUrl().trim(),
-      popularity: this.tour?.popularity ?? 0,
-      childFriendliness: this.tour?.childFriendliness ?? 0,
-      fromCoords: this.fromCoords(),
-      toCoords: this.toCoords()
     };
 
-    this.tourSaved.emit(tourData);
+    const payload: CreateTourRequest | UpdateTourRequest = this.tour
+      ? { tourId: this.tour.id, ...base }
+      : base;
+
+    this.tourSaved.emit(payload);
   }
 
   onCancel(): void {
     this.cancel.emit();
   }
 
-  formatTime(minutes: number): string {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    if (h === 0) return `${m}min`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-  }
+  formatTime = formatTime;
 }
